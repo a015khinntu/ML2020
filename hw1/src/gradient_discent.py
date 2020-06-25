@@ -15,7 +15,7 @@ parser.add_argument('--seed', default=0, type=int)
 parser.add_argument('--comment', default='', type=str)
 args = parser.parse_args()
 
-data = pd.read_csv('./train.csv', encoding = 'big5')
+data = pd.read_csv('data/train.csv', encoding = 'big5')
 data = data.iloc[:, 3:]
 data[data == 'NR'] = 0
 raw_data = data.to_numpy()
@@ -45,20 +45,11 @@ dim = num_feat * 9 + 1
 # w = np.random.uniform(0, 0.01, size=[dim, 1])
 w = np.zeros([dim, 1])
 
-from sklearn.decomposition import PCA
-pca = PCA(n_components=num_feat*9).fit(x)
-x_new = pca.transform(x)
+mean_x = np.mean(x, axis = 0) #18 * 9 
+std_x = np.std(x, axis = 0) #18 * 9 
+x = (x - mean_x) / std_x
 
-mean_x = np.mean(x_new, axis = 0) #18 * 9 
-std_x = np.std(x_new, axis = 0) #18 * 9 
-x_new = (x_new - mean_x) / std_x
-
-# mean_x = np.mean(x_new, axis = 0)
-# std_x = np.std(x_new, axis = 0)
-# x_new = (x_new - mean_x) / std_x
-# print(np.max(x_new), np.min(x_new))
-# exit()
-x = np.concatenate((np.ones([12 * 471, 1]), x_new), axis = 1).astype(float)
+x = np.concatenate((np.ones([12 * 471, 1]), x), axis = 1).astype(float)
 np.random.seed(args.seed)
 
 
@@ -135,7 +126,7 @@ with open('logs/adam.log', 'a') as log_file:
 # print(w, best_w)
 
 # testdata = pd.read_csv('gdrive/My Drive/hw1-regression/test.csv', header = None, encoding = 'big5')
-testdata = pd.read_csv('./test.csv', header = None, encoding = 'big5')
+testdata = pd.read_csv('data/test.csv', header = None, encoding = 'big5')
 test_data = testdata.iloc[:, 2:]
 test_data[test_data == 'NR'] = 0
 test_data = test_data.to_numpy()
@@ -143,7 +134,7 @@ test_x = np.empty([240, 18*9], dtype = float)
 for i in range(240):
     test_x[i, :] = test_data[18 * i: 18* (i + 1), :].reshape(1, -1)
 # test_x = np.concatenate((test_x ** 2, test_x), axis = 1).astype(float)
-test_x = pca.transform(test_x)
+
 test_x = (test_x - mean_x) / std_x
 test_x = np.concatenate((np.ones([240, 1]), test_x), axis = 1).astype(float)
 
