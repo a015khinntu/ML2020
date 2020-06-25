@@ -11,7 +11,6 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
 
-
 def apply_LR(args):
     data = read_train()
     x, y = extract_train_LR(data)
@@ -26,8 +25,9 @@ def apply_LR(args):
     pred = pred.flatten()
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_nn_base(args):
     data = read_train()
@@ -39,7 +39,8 @@ def apply_nn_base(args):
 
     min_loss = 1e10
     criterion = nn.MSELoss()
-    optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = Adam(model.parameters(), lr=args.lr,
+                     weight_decay=args.weight_decay)
     for epoch in range(args.epoch):
         model.train()
         train_loss = valid_loss = 0.0
@@ -50,7 +51,7 @@ def apply_nn_base(args):
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
-        
+
         train_loss /= len(dl)
         if train_loss < min_loss:
             torch.save(model, 'model/nn-base.pt')
@@ -66,8 +67,9 @@ def apply_nn_base(args):
     pred = pred.detach().numpy().flatten()
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_normLR(args):
     data = read_train()
@@ -82,7 +84,8 @@ def apply_normLR(args):
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=True)
     min_loss = 1e10
     criterion = nn.MSELoss()
-    optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = Adam(model.parameters(), lr=args.lr,
+                     weight_decay=args.weight_decay)
     for epoch in range(args.epoch):
         model.train()
         train_loss = valid_loss = 0.0
@@ -100,8 +103,8 @@ def apply_normLR(args):
             min_loss = train_loss
         if (epoch + 1) % args.sample_step == 0:
             print('[Epoch: {:5}] [Train Loss: {:.4}] [Valid Loss: {:.4}]'.format(
-                    epoch + 1, np.sqrt(train_loss * max_y ** 2), np.sqrt(valid_loss * max_y ** 2))
-                )
+                epoch + 1, np.sqrt(train_loss * max_y ** 2), np.sqrt(valid_loss * max_y ** 2))
+            )
 
     print(np.sqrt(min_loss * max_y ** 2))
     model = torch.load('model/normLR.pt')
@@ -114,8 +117,9 @@ def apply_normLR(args):
     pred[pred < 0] = 0
     pred *= max_y
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_dnn(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -123,24 +127,28 @@ def apply_dnn(args):
     x, y = extract_train_LR(data)
     y = np.expand_dims(y, 1)
     max_feat = np.max(x, axis=0)
-    max_y = np.max(y)
+    # max_y = np.max(y)
     x /= max_feat
-    y /= max_y
+    # y /= max_y
     # exit()
     (x, y), (x_valid, y_valid) = random_split(x, y)
     x_valid = torch.tensor(x_valid, dtype=torch.float32).to(device)
     y_valid = torch.tensor(y_valid, dtype=torch.float32).to(device)
-    model = DNN(dropout=args.dropout, num_feat=args.num_feat * 9, hidden_dim=args.hidden_dim).to(device)
+    model = DNN(dropout=args.dropout, num_feat=args.num_feat *
+                9, hidden_dim=args.hidden_dim).to(device)
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('\n=== start training, parameter total:{}, trainable:{}'.format(total, trainable))
+    print('\n=== start training, parameter total:{}, trainable:{}'.format(
+        total, trainable))
     ds = DNNDataset(x.astype(np.float32), y.astype(np.float32))
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=True)
     min_loss = 1e10
     criterion = nn.MSELoss()
-    optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = Adam(model.parameters(), lr=args.lr,
+                     weight_decay=args.weight_decay)
     # writer = SummaryWriter('logs/')
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=50, cooldown=50, min_lr=1e-8)
+    scheduler = ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=args.patience, min_lr=1e-6, verbose=True)
     for epoch in range(args.epoch):
         model.train()
         train_loss = valid_loss = 0.0
@@ -162,13 +170,13 @@ def apply_dnn(args):
             min_loss = valid_loss
         if (epoch + 1) % args.sample_step == 0:
             print('[Epoch: {:5}] [Train Loss: {:.4}] [Valid Loss: {:.4}]'.format(
-                    epoch + 1, np.sqrt(train_loss * max_y ** 2), np.sqrt(valid_loss * max_y ** 2))
-                )
+                epoch + 1, np.sqrt(train_loss), np.sqrt(valid_loss))
+            )
         # writer.add_scalar('train_loss', np.sqrt(train_loss * max_y ** 2), global_step=epoch)
         # writer.add_scalar('valid_loss', np.sqrt(valid_loss * max_y ** 2), global_step=epoch)
-    
+
     # writer.close()
-    print(np.sqrt(min_loss * max_y ** 2))
+    print(np.sqrt(min_loss))
     model = torch.load('model/dnn.pt')
     model.eval()
     test = read_test()
@@ -177,10 +185,11 @@ def apply_dnn(args):
     pred = model(test)
     pred = pred.detach().cpu().numpy().flatten()
     pred[pred < 0] = 0
-    pred *= max_y
+    # pred *= max_y
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_mean(args):
     test = read_test()
@@ -189,8 +198,9 @@ def apply_mean(args):
     pred = np.mean(test, axis=1)
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_last(args):
     test = read_test()
@@ -198,8 +208,9 @@ def apply_last(args):
     pred = test.reshape(num_test, 18, 9)[:, 9, -1]
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_clf_LR(args):
     data = read_train()
@@ -224,14 +235,16 @@ def apply_clf_LR(args):
     pred = np.array(pred)
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_regressor(args):
     from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
     from sklearn.linear_model import LogisticRegression
     from sklearn.svm import LinearSVR
-    regressor = LinearSVR()
+    from sklearn.tree import DecisionTreeRegressor
+    regressor = DecisionTreeRegressor()
     data = read_train()
     x, y = extract_train_LR(data)
     regressor.fit(x, y.flatten())
@@ -239,24 +252,27 @@ def apply_regressor(args):
     pred = regressor.predict(test).flatten()
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_feat_select(args):
     from sklearn.feature_selection import SelectKBest, f_regression
     data = read_train()
     x, y = extract_train_LR(data)
-    selector = SelectKBest(f_regression, args.num_feat * 9)
-    x_new = selector.fit_transform(x, y)
-    regressor = LinearRegression()
-    regressor.fit(x_new, y)
-    test = read_test()
-    test_new = selector.transform(test)
-    pred = regressor.predict(test_new).flatten()
-    pred[pred < 0] = 0
-    index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
-    df.to_csv(args.output, index=False)
+    selector = SelectKBest(f_regression, 10 * 9)
+    selector.
+    # x_new = selector.fit_transform(x, y)
+    # regressor = LinearRegression()
+    # regressor.fit(x_new, y)
+    # test = read_test()
+    # test_new = selector.transform(test)
+    # pred = regressor.predict(test_new).flatten()
+    # pred[pred < 0] = 0
+    # index = ['id_{}'.format(i) for i in range(len(pred))]
+    # df = pd.DataFrame({'id': index, 'value': pred})
+    # df.to_csv(args.output, index=False)
+
 
 def apply_fs_nn(args):
     from sklearn.feature_selection import SelectKBest, f_regression
@@ -274,17 +290,21 @@ def apply_fs_nn(args):
     (x, y), (x_valid, y_valid) = random_split(x_new, y)
     x_valid = torch.tensor(x_valid, dtype=torch.float32).to(device)
     y_valid = torch.tensor(y_valid, dtype=torch.float32).to(device)
-    model = DNN(dropout=args.dropout, num_feat=args.num_feat * 9, hidden_dim=args.hidden_dim).to(device)
+    model = DNN(dropout=args.dropout, num_feat=args.num_feat *
+                9, hidden_dim=args.hidden_dim).to(device)
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('\n=== start training, parameter total:{}, trainable:{}'.format(total, trainable))
+    print('\n=== start training, parameter total:{}, trainable:{}'.format(
+        total, trainable))
     ds = DNNDataset(x.astype(np.float32), y.astype(np.float32))
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=True)
     min_loss = 1e10
-    criterion = nn.BCELoss()
-    optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    criterion = nn.MSELoss()
+    optimizer = Adam(model.parameters(), lr=args.lr,
+                     weight_decay=args.weight_decay)
     # writer = SummaryWriter('logs/')
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=50, cooldown=50, min_lr=1e-6, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1,
+                                  patience=args.patience, cooldown=50, min_lr=1e-6, verbose=True)
     for epoch in range(args.epoch):
         model.train()
         train_loss = valid_loss = 0.0
@@ -306,11 +326,11 @@ def apply_fs_nn(args):
             min_loss = valid_loss
         if (epoch + 1) % args.sample_step == 0:
             print('[Epoch: {:5}] [Train Loss: {:.4}] [Valid Loss: {:.4}]'.format(
-                    epoch + 1, np.sqrt(train_loss * max_y ** 2), np.sqrt(valid_loss * max_y ** 2))
-                )
+                epoch + 1, np.sqrt(train_loss * max_y ** 2), np.sqrt(valid_loss * max_y ** 2))
+            )
         # writer.add_scalar('train_loss', np.sqrt(train_loss * max_y ** 2), global_step=epoch)
         # writer.add_scalar('valid_loss', np.sqrt(valid_loss * max_y ** 2), global_step=epoch)
-    
+
     # writer.close()
     print(np.sqrt(min_loss * max_y ** 2))
     model = torch.load('model/fs_nn.pt')
@@ -324,8 +344,9 @@ def apply_fs_nn(args):
     pred[pred < 0] = 0
     pred *= max_y
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_np_LR(args):
     '''
@@ -343,14 +364,15 @@ def apply_np_LR(args):
     weight = np.zeros(162)
     bias = 0.0
     lda = args.weight_decay
-    episilon = 1e-8 # as in keras eposilon = 1e-8
+    episilon = 1e-8  # as in keras eposilon = 1e-8
     beta1 = 0.9
     beta2 = 0.999
     momentum = np.zeros(163)
     rms = np.zeros(163)
     Loss = []
     min_rms = 1e10
-    scheduler = ReduceLR(lr, mode='min', factor=0.1, patience=200, cooldown=200, min_lr=1e-8)
+    scheduler = ReduceLR(lr, mode='min', factor=0.1,
+                         patience=200, cooldown=200, min_lr=1e-8)
     for epoch in range(args.epoch):
         y_predict = x @ weight + bias
         Loss = y_predict - y
@@ -385,8 +407,9 @@ def apply_np_LR(args):
     pred = (test @ weight + bias) * max_y
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_fs_np_LR(args):
     '''
@@ -407,14 +430,15 @@ def apply_fs_np_LR(args):
     # weight = np.zeros(162)
     bias = 0.0
     lda = args.weight_decay
-    episilon = 1e-8 # as in keras eposilon = 1e-8
+    episilon = 1e-8  # as in keras eposilon = 1e-8
     beta1 = 0.9
     beta2 = 0.999
     momentum = np.zeros(args.num_features + 1)
     rms = np.zeros(args.num_features + 1)
     Loss = []
     min_rms = 1e10
-    scheduler = ReduceLR(lr, mode='min', factor=0.1, patience=200, cooldown=200, min_lr=1e-6)
+    scheduler = ReduceLR(lr, mode='min', factor=0.1,
+                         patience=200, cooldown=200, min_lr=1e-6)
     for epoch in range(args.epoch):
         y_predict = x_new @ weight + bias
         Loss = y_predict - y
@@ -450,8 +474,9 @@ def apply_fs_np_LR(args):
     pred = (test_new @ weight + bias) * max_y
     pred[pred < 0] = 0
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
+
 
 def apply_embedding(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -468,18 +493,21 @@ def apply_embedding(args):
     x_valid, valid_direc = get_direc(x_valid)
     x_valid /= max_feat
     y_valid = torch.tensor(y_valid, dtype=torch.float32).to(device)
-    model = EmbeddingNet(hidden_dim=args.hidden_dim, num_embed=args.num_embeddings, 
+    model = EmbeddingNet(hidden_dim=args.hidden_dim, num_embed=args.num_embeddings,
                          embed_dim=args.embedding_dim, dropout=args.dropout).to(device)
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('\n=== start training, parameter total:{}, trainable:{}'.format(total, trainable))
+    print('\n=== start training, parameter total:{}, trainable:{}'.format(
+        total, trainable))
     ds = DNNDataset(x.astype(np.float32), y.astype(np.float32))
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=True)
     min_loss = 1e10
     criterion = nn.MSELoss()
-    optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = Adam(model.parameters(), lr=args.lr,
+                     weight_decay=args.weight_decay)
     # writer = SummaryWriter('logs/')
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, cooldown=10, min_lr=1e-6, verbose=True)
+    scheduler = ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=args.patience, min_lr=1e-6, verbose=True)
     for epoch in range(args.epoch):
         model.train()
         train_loss = valid_loss = 0.0
@@ -503,11 +531,11 @@ def apply_embedding(args):
             min_loss = valid_loss
         if (epoch + 1) % args.sample_step == 0:
             print('[Epoch: {:5}] [Train Loss: {:.4}] [Valid Loss: {:.4}]'.format(
-                    epoch + 1, np.sqrt(train_loss) * max_y, np.sqrt(valid_loss) * max_y)
-                )
+                epoch + 1, np.sqrt(train_loss) * max_y, np.sqrt(valid_loss) * max_y)
+            )
         # writer.add_scalar('train_loss', np.sqrt(train_loss * max_y ** 2), global_step=epoch)
         # writer.add_scalar('valid_loss', np.sqrt(valid_loss * max_y ** 2), global_step=epoch)
-    
+
     # writer.close()
     print(np.sqrt(min_loss * max_y ** 2))
     model = torch.load('model/embedding-net.pt')
@@ -522,7 +550,82 @@ def apply_embedding(args):
     pred[pred < 0] = 0
     pred *= max_y
     index = ['id_{}'.format(i) for i in range(len(pred))]
-    df = pd.DataFrame({'id':index, 'value':pred})
+    df = pd.DataFrame({'id': index, 'value': pred})
+    df.to_csv(args.output, index=False)
+
+
+def apply_rnn(args):
+    from torch.distributions import Poisson
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    data = read_train()
+    x, y = extract_train_LR_v0(data, 1)
+    max_feat = torch.tensor(np.max(x, axis=0)).to(device)
+    max_y = np.max(y)
+    train, valid = random_split_month(data)
+    rng = Poisson(9)
+    model = OneTargetRNN(hidden_dim=args.hidden_dim, num_feat=args.num_feat,
+                         num_layers=args.num_layers, dropout=args.dropout).to(device)
+    total = sum(p.numel() for p in model.parameters())
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print('\n=== start training, parameter total:{}, trainable:{}'.format(
+        total, trainable))
+
+    def get_dataloader(x_data, y_data, batch_size):
+        ds = DNNDataset(x_data, y_data)
+        dl = DataLoader(ds, batch_size=args.batch_size, shuffle=True)
+        return dl
+    criterion = nn.MSELoss()
+    optimizer = Adam(model.parameters(), lr=args.lr,
+                     weight_decay=args.weight_decay)
+    scheduler = ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=args.patience, min_lr=1e-6, verbose=True)
+    min_loss = 1e10
+    x_valid, y_valid = extract_train_rnn_v0(
+        valid, device, num_hour=9, num_month=1)
+    x_valid /= max_feat
+    y_valid /= max_y
+    for epoch in range(args.epoch):
+        hours = int(rng.sample()) + 1
+        batch_data = extract_train_rnn_v0(train, device, hours)
+        x, y = batch_data
+        x /= max_feat
+        y /= max_y
+        model.train()
+        loader = get_dataloader(x, y, args.batch_size)
+        train_loss = 0
+        for batch in loader:
+            x_train, y_train = batch
+            optimizer.zero_grad()
+            y_pred = model(x_train)
+            loss = criterion(y_pred, y_train)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
+        model.eval()
+        valid_loss = criterion(model(x_valid), y_valid).item()
+        scheduler.step(valid_loss)
+        train_loss /= len(loader)
+        if valid_loss < min_loss:
+            torch.save(model, 'model/rnn-base.pt')
+            min_loss = valid_loss
+        if (epoch + 1) % args.sample_step == 0:
+            print('[Epoch: {:5}] [Train Loss: {:.4}] [Valid Loss: {:.4}]'.format(
+                epoch + 1, np.sqrt(train_loss) * max_y, np.sqrt(valid_loss) * max_y)
+            )
+
+    print(np.sqrt(min_loss * max_y ** 2))
+    model = torch.load('model/rnn-base.pt')
+    model.eval()
+    test = read_test_rnn_v0()
+    test = test.to(device)
+    test /= max_feat
+    pred = model(test)
+    pred = pred.detach().cpu().numpy().flatten()
+    pred[pred < 0] = 0
+    pred *= max_y
+    index = ['id_{}'.format(i) for i in range(len(pred))]
+    df = pd.DataFrame({'id': index, 'value': pred})
     df.to_csv(args.output, index=False)
 
 
@@ -553,6 +656,9 @@ def main(args):
         apply_fs_np_LR(args)
     elif args.mode == 'embedding':
         apply_embedding(args)
+    elif args.mode == 'rnn':
+        apply_rnn(args)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -569,5 +675,7 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_dim', default=256, type=int)
     parser.add_argument('--num_embeddings', default=15, type=int)
     parser.add_argument('--embedding_dim', default=5, type=int)
+    parser.add_argument('--num_layers', default=1, type=int)
+    parser.add_argument('--patience', default=10, type=int)
     args = parser.parse_args()
     main(args)
